@@ -2,15 +2,17 @@
 Модуль запуска и обработки программы по синхронизации файлов
 """
 
+import logging
 import os
 from time import sleep
-import logging
+
+import requests
+
 import get_config
 from api.api_ya_disk import ApiYandexDisk
 
 
 def start_sync_file() -> None:
-
     """
     Функция запуска цикла синхронизации файлов
     """
@@ -28,7 +30,6 @@ def start_sync_file() -> None:
 
 
 def sync_service(cls_sync, serv_dir, pc_dir, log_file) -> None:
-
     """
     Функция синхронизации файлов
 
@@ -38,44 +39,47 @@ def sync_service(cls_sync, serv_dir, pc_dir, log_file) -> None:
     :param log_file: путь к файлу логирования
     """
 
-    logging.basicConfig(level=logging.INFO, filename=log_file, filemode='w',
-                        format="%(asctime)s %(levelname)s %(message)s (Функция: %(funcName)s)",
-                        encoding='utf-8')
-
-    files_serv_dir: dict[str, float] = cls_sync.get_info(serv_dir)
+    logging.basicConfig(
+        level=logging.INFO,
+        filename=log_file,
+        filemode="w",
+        format="%(asctime)s %(levelname)s %(message)s (Функция: %(funcName)s)",
+        encoding="utf-8",
+    )
 
     try:
-        for i_file in os.listdir(pc_dir):
+        files_serv_dir: dict[str, float] = cls_sync.get_info(serv_dir)
 
-            path_file: str = os.path.join(os.path.abspath(os.sep),
-                                          get_config.path_sync_folder,
-                                          i_file)
+        for i_file in os.listdir(pc_dir):
+            path_file: str = os.path.join(
+                os.path.abspath(os.sep), get_config.path_sync_folder, i_file
+            )
 
             time_ya_disk: float = files_serv_dir.get(i_file)
             time_file_pc: float = os.path.getmtime(path_file)
 
             if i_file not in files_serv_dir:
-
-                with open(path_file, mode='rb') as file:
+                with open(path_file, mode="rb") as file:
                     cls_sync.load(serv_dir, file)
 
-                logging.info('Файл %s успешно записан', i_file)
+                logging.info("Файл %s успешно записан", i_file)
 
             if i_file in files_serv_dir and time_file_pc > time_ya_disk:
-
-                with open(path_file, mode='rb') as file:
+                with open(path_file, mode="rb") as file:
                     cls_sync.reload(serv_dir, file)
 
-                logging.info('Файл %s успешно перезаписан', i_file)
+                logging.info("Файл %s успешно перезаписан", i_file)
 
         for i_file in files_serv_dir.keys():
-
             if i_file not in os.listdir(pc_dir):
                 cls_sync.delete(i_file)
 
-                logging.info('Файл %s удален', i_file)
+                logging.info("Файл %s удален", i_file)
 
-    except FileNotFoundError as exc:
+    except requests.exceptions.ConnectionError:
+        logging.error(msg="Ошибка соединения")
+
+    except (FileNotFoundError, AttributeError, PermissionError) as exc:
         logging.error(msg=exc)
 
 
